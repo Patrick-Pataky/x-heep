@@ -225,7 +225,7 @@ module w25q128jw_controller
   // This is mandatory as otherwise the controller will be stuck in FWAIT FSM in simulation
 `ifndef FPGA_SYNTHESIS
 `ifndef SYNTHESIS
-  assign pass_fwait = 1'b1;
+  assign pass_fwait = 1'b0;
 `else
   assign pass_fwait = 1'b0;
 `endif
@@ -584,7 +584,7 @@ module w25q128jw_controller
           // -------- Read current CONTROL register value --------
           // We need to preserve other bits when modifying RXWM (preserved in read_value from OBI FSM)
           FWAIT_SET_RXWM_R: begin
-            spi_host_reg_req_offset  = SPI_HOST_COMMAND_OFFSET;
+            spi_host_reg_req_offset  = SPI_HOST_CONTROL_OFFSET;
             spi_host_reg_req_o.write = 1'b0;
             spi_host_reg_req_o.valid = 1'b1;
             if (spi_host_reg_rsp_i.ready && ~spi_host_reg_rsp_i.error) begin
@@ -596,7 +596,7 @@ module w25q128jw_controller
 
           // -------- Write back with RX watermark = 1 --------
           FWAIT_SET_RXWM_W: begin
-            spi_host_reg_req_offset = SPI_HOST_COMMAND_OFFSET;
+            spi_host_reg_req_offset = SPI_HOST_CONTROL_OFFSET;
             spi_host_reg_req_o.write = 1'b1;
             spi_host_reg_req_o.valid = 1'b1;
             //we are sharing the sector_iter_offset_q register with the rdata from SPI to save resources
