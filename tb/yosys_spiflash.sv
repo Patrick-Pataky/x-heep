@@ -26,7 +26,7 @@
 // updates output signals 1ns after the SPI clock edge.
 //
 // Supported commands:
-//    AB, B9, FF, 03, BB, EB, ED, 06, 02, 32
+//    AB, B9, FF, 03, BB, EB, ED, 06, 02, 32, 20, 05
 //
 // Well written SPI flash data sheets:
 //    Cypress S25FL064L http://www.cypress.com/file/316661/download
@@ -142,6 +142,15 @@ module spiflash (
         if (bytecount >= 4) begin
           buffer   = memory[spi_addr];
           spi_addr = spi_addr + 1;
+        end
+      end
+
+      if (powered_up && spi_cmd == 'h05) begin
+        if (bytecount == 1) begin
+          // Simplified model:
+          // - protect bits always 0
+          // - busy bit always 0 (ready)
+          buffer = {6'b000000, write_enable, 1'b0};
         end
       end
 
