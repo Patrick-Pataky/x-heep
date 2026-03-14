@@ -26,7 +26,7 @@
 // updates output signals 1ns after the SPI clock edge.
 //
 // Supported commands:
-//    AB, B9, FF, 03, BB, EB, ED, 06, 02, 32
+//    AB, B9, FF, 03, BB, EB, ED, 06, 02, 32, 20, 05
 //
 // Well written SPI flash data sheets:
 //    Cypress S25FL064L http://www.cypress.com/file/316661/download
@@ -56,11 +56,14 @@ module spiflash (
 );
   localparam verbose = 0;
   localparam integer latency = 8;
+  localparam integer sector_size = 4096;  // 4 KB
 
   logic [7:0] buffer;
   integer bitcount = 0;
   integer bytecount = 0;
   integer dummycount = 0;
+  integer erase_addr = 0;
+  integer erase_offset = 0;
 
   logic [7:0] spi_cmd;
   logic [7:0] xip_cmd = 0;
@@ -142,6 +145,15 @@ module spiflash (
         end
       end
 
+      if (powered_up && spi_cmd == 'h05) begin
+        if (bytecount == 1) begin
+          // Simplified model:
+          // - protect bits always 0
+          // - busy bit always 0 (ready)
+          buffer = {6'b000000, write_enable, 1'b0};
+        end
+      end
+
       if (powered_up && write_enable && spi_cmd == 'h02) begin
         if (bytecount == 1) write_enable_reset = 1;
 
@@ -154,6 +166,23 @@ module spiflash (
         if (bytecount >= 5 && bytecount <= 260) begin
           memory[spi_addr] = buffer;
           spi_addr = spi_addr + 1;
+        end
+      end
+
+      if (powered_up && write_enable && spi_cmd == 'h20) begin
+        if (bytecount == 1) write_enable_reset = 1;
+
+        if (bytecount == 2) spi_addr[23:16] = buffer;
+
+        if (bytecount == 3) spi_addr[15:8] = buffer;
+
+        if (bytecount == 4) begin
+          spi_addr[7:0] = buffer;
+
+          erase_addr = spi_addr & 24'hff0000;
+          for (erase_offset = 0; erase_offset < sector_size; erase_offset = erase_offset + 1) begin
+            memory[erase_addr + erase_offset] = 8'hff;
+          end
         end
       end
 
