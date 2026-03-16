@@ -57,6 +57,7 @@ module spiflash (
   localparam verbose = 0;
   localparam integer latency = 8;
   localparam integer sector_size = 4096;  // 4 KB
+  localparam integer busy_cycles = 100;
 
   logic [7:0] buffer;
   integer bitcount = 0;
@@ -76,6 +77,9 @@ module spiflash (
   logic powered_up = 0;
   logic write_enable = 0;
   logic write_enable_reset = 0;
+
+  logic command_pending = 0;
+  integer current_busy_cycles = 0;
 
   localparam [3:0] mode_spi = 1;
   localparam [3:0] mode_dspi_rd = 2;
@@ -123,13 +127,23 @@ module spiflash (
       if (bytecount == 1) begin
         spi_cmd = buffer;
 
-        if (spi_cmd == 8'hab) powered_up = 1;
+        // Only commands that can be executed while busy (Section 7.1.1):
+        // - read status register ('h05, 'h35, 'h15)
+        // - erase / program suspend ('h75)
+        if (current_busy_cycles > 0 
+            && spi_cmd != 'h05 && spi_cmd != 'h35 && spi_cmd != 'h15
+            && spi_cmd != 'h75
+        ) begin
+          spi_cmd = 8'h00;
+        end else begin
+          if (spi_cmd == 8'hab) powered_up = 1;
 
-        if (spi_cmd == 8'hb9) powered_up = 0;
+          if (spi_cmd == 8'hb9) powered_up = 0;
 
-        if (spi_cmd == 8'hff) xip_cmd = 0;
+          if (spi_cmd == 8'hff) xip_cmd = 0;
 
-        if (spi_cmd == 8'h06) write_enable = 1;
+          if (spi_cmd == 8'h06) write_enable = 1;
+        end
       end
 
       if (powered_up && spi_cmd == 'h03) begin
@@ -149,13 +163,15 @@ module spiflash (
         if (bytecount == 1) begin
           // Simplified model:
           // - protect bits always 0
-          // - busy bit always 0 (ready)
-          buffer = {6'b000000, write_enable, 1'b0};
+          buffer = {6'b000000, write_enable, (current_busy_cycles != 0)};
         end
       end
 
       if (powered_up && write_enable && spi_cmd == 'h02) begin
-        if (bytecount == 1) write_enable_reset = 1;
+        if (bytecount == 1) begin
+          write_enable_reset = 1;
+          command_pending = 1;
+        end
 
         if (bytecount == 2) spi_addr[23:16] = buffer;
 
@@ -170,7 +186,10 @@ module spiflash (
       end
 
       if (powered_up && write_enable && spi_cmd == 'h20) begin
-        if (bytecount == 1) write_enable_reset = 1;
+        if (bytecount == 1) begin
+          write_enable_reset = 1;
+          command_pending = 1;
+        end
 
         if (bytecount == 2) spi_addr[23:16] = buffer;
 
@@ -322,6 +341,10 @@ module spiflash (
         write_enable = 0;
         write_enable_reset = 0;
       end
+      if (page_program_pending) begin
+        current_busy_cycles = busy_cycles;
+        page_program_pending = 0;
+      end
       buffer = 0;
       bitcount = 0;
       bytecount = 0;
@@ -423,6 +446,9 @@ module spiflash (
   end
 
   always @(posedge clk) begin
+    if (current_busy_cycles > 0)
+      current_busy_cycles = current_busy_cycles - 1;
+
     if (!csb) begin
       if (dummycount > 0) begin
         dummycount = dummycount - 1;
