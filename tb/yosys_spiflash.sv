@@ -341,9 +341,9 @@ module spiflash (
         write_enable = 0;
         write_enable_reset = 0;
       end
-      if (page_program_pending) begin
+      if (command_pending) begin
         current_busy_cycles = busy_cycles;
-        page_program_pending = 0;
+        command_pending = 0;
       end
       buffer = 0;
       bitcount = 0;
@@ -446,8 +446,7 @@ module spiflash (
   end
 
   always @(posedge clk) begin
-    if (current_busy_cycles > 0)
-      current_busy_cycles = current_busy_cycles - 1;
+    if (current_busy_cycles > 0) current_busy_cycles = current_busy_cycles - 1;
 
     if (!csb) begin
       if (dummycount > 0) begin
