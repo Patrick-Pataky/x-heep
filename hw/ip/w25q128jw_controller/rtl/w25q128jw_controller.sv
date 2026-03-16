@@ -213,6 +213,7 @@ module w25q128jw_controller
   logic [1:0] fwait_cnt_q, fwait_cnt_d;
   logic [3:0] page_cnt_q, page_cnt_d;
   logic [31:0] sector_offset, sector_iter_offset_d, sector_iter_offset_q, md_offset_d, md_offset_q;
+  logic [31:0] spi_control_q, spi_control_d;
 
   // Simulation Bypass Signal
   logic pass_fwait;
@@ -251,6 +252,7 @@ module w25q128jw_controller
       page_cnt_q    <= 4'b0;
       sector_iter_offset_q <= 32'h0;
       md_offset_q <= 32'h0;
+      spi_control_q <= 32'h0;
     end else begin
       dma_init_state_q <= dma_init_state_d;
       dma_init_return_q <= dma_init_return_d;
@@ -264,6 +266,7 @@ module w25q128jw_controller
       page_cnt_q    <= page_cnt_d;
       sector_iter_offset_q <= sector_iter_offset_d;
       md_offset_q <= md_offset_d;
+      spi_control_q <= spi_control_d;
     end
   end
 
@@ -285,6 +288,7 @@ module w25q128jw_controller
     page_cnt_d = page_cnt_q;
     sector_iter_offset_d = sector_iter_offset_q;
     md_offset_d = md_offset_q;
+    spi_control_d = spi_control_q;
 
     sector_offset = 32'h0;
 
@@ -327,6 +331,13 @@ module w25q128jw_controller
       // Wait for SW to set the START bit in CONTROL register
       TOP_IDLE: begin
         if (reg2hw.control.start.q) begin
+          if (!reg2hw.control.rnw.q) begin
+            fwait_cnt_d = 2'h0;
+            page_cnt_d = 4'h0;
+            sector_iter_offset_d = 32'h0;
+            md_offset_d = 32'h0;
+          end
+
           top_state_d = TOP_READ;  // Always start with READ (for both read and write operations)
         end
       end
@@ -588,8 +599,7 @@ module w25q128jw_controller
             spi_host_reg_req_o.write = 1'b0;
             spi_host_reg_req_o.valid = 1'b1;
             if (spi_host_reg_rsp_i.ready && ~spi_host_reg_rsp_i.error) begin
-              //we are sharing the sector_iter_offset_q register with the rdata from SPI to save resources
-              sector_iter_offset_d = spi_host_reg_rsp_i.rdata;
+              spi_control_d = spi_host_reg_rsp_i.rdata;
               fwait_state_d = FWAIT_SET_RXWM_W;
             end
           end
@@ -599,10 +609,8 @@ module w25q128jw_controller
             spi_host_reg_req_offset = SPI_HOST_CONTROL_OFFSET;
             spi_host_reg_req_o.write = 1'b1;
             spi_host_reg_req_o.valid = 1'b1;
-            //we are sharing the sector_iter_offset_q register with the rdata from SPI to save resources
-            //in this state, the sector_iter_offset_q register represents the previous read value
             spi_host_reg_req_o.wdata = {
-              sector_iter_offset_q[31:8], 8'h01
+              spi_control_q[31:8], 8'h01
             };  // Keep upper CONTROL bits, set RXWM = 1
             if (spi_host_reg_rsp_i.ready && ~spi_host_reg_rsp_i.error) begin
               fwait_state_d = FWAIT_SPI_CHECK_TX_FIFO;
