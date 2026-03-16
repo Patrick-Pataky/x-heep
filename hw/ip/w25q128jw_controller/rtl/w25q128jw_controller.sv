@@ -9,9 +9,10 @@
  * See "sw/application/example_w25q128jw_read/write" for software usage examples (with polling-mode).
  * or "sw/application/example_w25q128jw_read_interrupt" for interrupt-mode usage.
  *
- * Author: Thomas Lenges   <thomas.lenges@epfl.ch> 
+ * Author: Thomas Lenges   <thomas.lenges@epfl.ch>
  *                         <thomas.lenges@hotmail.com>
  * Additional authors:  Davide Schiavone <davide.schiavone@epfl.ch>
+ *                      Patrick Pataky <patric.pataky@epfl.ch>
  */
 module w25q128jw_controller
   import core_v_mini_mcu_pkg::*;
@@ -35,7 +36,7 @@ module w25q128jw_controller
     output reg_req_t spi_host_reg_req_o,
     input  reg_rsp_t spi_host_reg_rsp_i,
 
-    // DMA HW Controller 
+    // DMA HW Controller
     output dma_reg_pkg::dma_hw2reg_t external_dma_hw2reg_o,
     // SPI HW register
     input spi_host_reg_pkg::spi_host_hw2reg_status_reg_t external_spi_host_hw2reg_status_i,
@@ -110,9 +111,9 @@ module w25q128jw_controller
 
   // -------- FLASH WAIT FSM STATES --------
   // Waits for flash internal operations to complete (erase/program)
-  // by polling the flash status register (Read Status Register 1) (Not necessary in simulation)
+  // by polling the flash status register (Read Status Register 1)
   typedef enum logic [3:0] {
-    FWAIT_IDLE,  // If in simulation, bypass wait. Else, go through FWAIT & ERASE FSMs
+    FWAIT_IDLE,  // Go through FWAIT & ERASE FSMs
     FWAIT_SET_RXWM_R,  // Read current RX watermark setting (within SPI Host Control Register)
     FWAIT_SET_RXWM_W,  // Set RX watermark to 1 (for single word read: flash status register 1)
     FWAIT_SPI_CHECK_TX_FIFO,  // Check if TX FIFO has space
@@ -178,7 +179,7 @@ module w25q128jw_controller
     // Finalize page write
     WRITE_TRANS,            // Wait for DMA transfer complete
     WRITE_PP_WAIT_READY_2,  // Wait for SPI Host ready
-    WRITE_PP_SEND_CMD_2     // Send final command to release CS (ends page program) 
+    WRITE_PP_SEND_CMD_2     // Send final command to release CS (ends page program)
     //and redirect depending on number of pages programmed and if more sectors need to be written
   } write_state_e;
 
@@ -215,24 +216,8 @@ module w25q128jw_controller
   logic [31:0] sector_offset, sector_iter_offset_d, sector_iter_offset_q, md_offset_d, md_offset_q;
   logic [31:0] spi_control_q, spi_control_d;
 
-  // Simulation Bypass Signal
-  logic pass_fwait;
   logic [31:0] dma_size;
-
   logic [31:0] flash_address;
-
-
-  // In simulation (not FPGA_SYNTHESIS and not SYNTHESIS), we skip the flash wait and erase FSMs
-  // This is mandatory as otherwise the controller will be stuck in FWAIT FSM in simulation
-`ifndef FPGA_SYNTHESIS
-`ifndef SYNTHESIS
-  assign pass_fwait = 1'b0;
-`else
-  assign pass_fwait = 1'b0;
-`endif
-`else
-  assign pass_fwait = 1'b0;
-`endif
 
   // FSM sequential logic
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -317,11 +302,10 @@ module w25q128jw_controller
     // ============================================================================
     // Orchestrates all sub-FSMs based on the requested operation:
     //   - Read (rnw=1):  TOP_IDLE -> TOP_READ -> TOP_IDLE
-    //   - Write (rnw=0): TOP_IDLE -> TOP_READ -> TOP_FWAIT -> TOP_ERASE -> TOP_FWAIT -> 
+    //   - Write (rnw=0): TOP_IDLE -> TOP_READ -> TOP_FWAIT -> TOP_ERASE -> TOP_FWAIT ->
     //                    TOP_MODIFY -> TOP_WRITE -> TOP_FWAIT -> TOP_IDLE
     //
     // Note that:
-    //   - FWAIT AND ERASE are bypassed in SIM
     //   - Read operation is byte precise while Write operation is word precise
     //   - meaning that, if you write 5bytes, it writes 8 bytes (round to next word size)
     //   - this is because the MODIFY FSM (SRAM to SRAM) uses WORDs type transfers
@@ -537,14 +521,10 @@ module w25q128jw_controller
       // The BUSY bit (bit 0) is set during erase/program operations
       //
       // This FSM is called multiple times during a write operation:
-      // IN SIM:
-      //   fwait_cnt = 0: After READ  -> bypass wait, go to MODIFY
-      //   fwait_cnt = 1: After WRITE -> bypass wait, complete
-      //
-      // In NOT SIM:
       //   fwait_cnt = 0: After READ  -> wait for flash ready, then go to ERASE
       //   fwait_cnt = 1: After ERASE -> wait for flash ready, then go to MODIFY
       //   fwait_cnt = 2: After WRITE -> wait for flash ready, then complete
+      //   fwait_cnt = 3: After WRITE with more pages to write -> wait for flash ready, then continue writing next page
       //
       // Note: fwait_cnt is reset to 0 if total length has not been written yet and more sectors need to be processed
       // Hence the operation only finishes when all the data has been written back into flash
@@ -553,37 +533,9 @@ module w25q128jw_controller
       TOP_FWAIT: begin
         case (fwait_state_q)
 
-          // -------- IDLE: Check for simulation bypass or start flash wait FSM --------
+          // -------- Start polling flash Status Register 1 --------
           FWAIT_IDLE: begin
-            if (pass_fwait) begin
-              // ===== SIMULATION MODE: Skip flash wait =====
-              case (fwait_cnt_q)
-                // After READ: Skip ERASE, go directly to MODIFY
-                2'h0: begin
-                  fwait_cnt_d   = 2'h1;
-                  fwait_state_d = FWAIT_IDLE;
-                  top_state_d   = TOP_MODIFY;
-                end
-                // After MODIFY+WRITE: Operation complete
-                2'h1: begin
-                  fwait_cnt_d = 2'h0;
-                  fwait_state_d = FWAIT_IDLE;
-                  top_state_d = TOP_IDLE;
-                  md_offset_d = 32'h0;  // Reset MODIFY offset for next operation
-                  sector_iter_offset_d = 32'h0;  // Reset sector iteration offset for next operation
-                  hw2reg.control.start.de = 1'b1;  // Clear START bit so operation is only done once
-                  hw2reg.control.start.d = 1'b0;
-                  hw2reg.intr_status.de   = 1'b1;     // Set interrupt status (rise IRQ through assignements (see end of module))
-                  hw2reg.intr_status.d = reg2hw.intr_enable.q;
-                end
-
-                default: begin
-                end
-              endcase
-            end else begin
-              // ===== SYNTHESIS/FPGA MODE: Start polling flash Status Register 1 =====
-              fwait_state_d = FWAIT_SET_RXWM_R;
-            end
+            fwait_state_d = FWAIT_SET_RXWM_R;
           end
 
           // ============== CONFIGURE RX WATERMARK ==============
@@ -884,7 +836,7 @@ module w25q128jw_controller
               // Go to FWAIT FSM to poll status register until erase completes
               erase_state_d = ERASE_IDLE;
               top_state_d = TOP_FWAIT;
-              fwait_state_d = FWAIT_SET_RXWM_R; // Start polling (skip FWAIT_IDLE since we know we need to wait: NO SIM)
+              fwait_state_d = FWAIT_SET_RXWM_R; // Start polling (skip FWAIT_IDLE)
             end
           end
 
@@ -930,7 +882,7 @@ module w25q128jw_controller
             modify_state_d = MODIFY_TRANS;
             //Set DMA source pointer: RAM new data buffer (at MD_ADDRESS)
             external_dma_hw2reg_o.src_ptr.de = 1'b1;
-            // Source = MD_ADDRESS + offset for current sector iteration (for multi-sector writes) 
+            // Source = MD_ADDRESS + offset for current sector iteration (for multi-sector writes)
             // F_ADDRESS not necessarily sector aligned and such case must be taken into consideration
             external_dma_hw2reg_o.src_ptr.d = reg2hw.md_address.q + md_offset_q;
             //Set DMA destination pointer: RAM sector buffer
@@ -1142,7 +1094,7 @@ module w25q128jw_controller
             //Set DMA source pointer: RAM sector buffer (at S_ADDRESS) with page offset
             external_dma_hw2reg_o.src_ptr.de = 1'b1;
             external_dma_hw2reg_o.src_ptr.d = reg2hw.s_address.q + ({28'h0, page_cnt_q} << 8);
-            //Set DMA destination pointer: SPI Host TX FIFO 
+            //Set DMA destination pointer: SPI Host TX FIFO
             external_dma_hw2reg_o.dst_ptr.de = 1'b1;
             external_dma_hw2reg_o.dst_ptr.d = SPI_FLASH_START_ADDRESS + {25'b0, SPI_HOST_TXDATA_OFFSET};
             //Set source increment: +4 bytes per word
@@ -1358,7 +1310,7 @@ module w25q128jw_controller
   assign hw2reg.status.de = 1'b1;  // Always update status register
   assign w25q128jw_controller_intr_o = reg2hw.intr_status.q; // ISR Handler lowers interrupt status register (interrupt register is risen in hw2reg by FSM when done)
 
-  // Registers 
+  // Registers
   w25q128jw_controller_reg_top #(
       .reg_req_t(reg_req_t),
       .reg_rsp_t(reg_rsp_t)
