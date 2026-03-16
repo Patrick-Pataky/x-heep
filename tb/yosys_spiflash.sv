@@ -130,7 +130,7 @@ module spiflash (
         // Only commands that can be executed while busy (Section 7.1.1):
         // - read status register ('h05, 'h35, 'h15)
         // - erase / program suspend ('h75)
-        if (current_busy_cycles > 0 
+        if (current_busy_cycles > 0
             && spi_cmd != 'h05 && spi_cmd != 'h35 && spi_cmd != 'h15
             && spi_cmd != 'h75
         ) begin
