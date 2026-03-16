@@ -265,7 +265,7 @@ w25q_error_codes_t w25q128jw_init(spi_host_t* spi_host) {
     // Power up flash
     flash_power_up();
 
-    // Set QE bit (only FPGA, simulation do not support status registers at all)
+    // Set QE bit (only FPGA, simulation do not support writing to status registers)
     #ifndef TARGET_SIM
     if (set_QE_bit() == FLASH_ERROR) return FLASH_ERROR; // Error occurred while setting QE bit
     #endif // TARGET_SIM
@@ -455,10 +455,8 @@ w25q_error_codes_t w25q128jw_erase_and_write_standard(uint32_t addr, void* data,
         status = w25q128jw_read_standard(sector_start_addr, w25q128jw_sector_data, FLASH_SECTOR_SIZE);
         if (status != FLASH_OK) return FLASH_ERROR;
 
-        // Erase the sector (no need to do so in simulation)
-        #ifndef TARGET_SIM
+        // Erase the sector
         w25q128jw_4k_erase(sector_start_addr);
-        #endif // TARGET_SIM
 
         // Calculate the length of data to write in this sector
         uint32_t write_length = MIN(FLASH_SECTOR_SIZE - (current_addr - sector_start_addr), remaining_length);
@@ -688,10 +686,8 @@ w25q_error_codes_t w25q128jw_erase_and_write_standard_dma(uint32_t addr, void* d
         status = w25q128jw_read_standard_dma(sector_start_addr, w25q128jw_sector_data, FLASH_SECTOR_SIZE, 0, 0);
         if (status != FLASH_OK) return FLASH_ERROR;
 
-        // Erase the sector (no need to do so in simulation)
-        #ifndef TARGET_SIM
+        // Erase the sector
         w25q128jw_4k_erase(sector_start_addr);
-        #endif // TARGET_SIM
 
         // Calculate the length of data to write in this sector
         uint32_t write_length = MIN(FLASH_SECTOR_SIZE - (current_addr - sector_start_addr), remaining_length);
@@ -1545,10 +1541,8 @@ w25q_error_codes_t erase_and_write(uint32_t addr, uint8_t *data, uint32_t length
         status = w25q128jw_read(sector_start_addr, w25q128jw_sector_data, FLASH_SECTOR_SIZE);
         if (status != FLASH_OK) return FLASH_ERROR;
 
-        // Erase the sector (no need to do so in simulation)
-        #ifndef TARGET_SIM
+        // Erase the sector
         w25q128jw_4k_erase(sector_start_addr);
-        #endif // TARGET_SIM
 
         // Calculate the length of data to write in this sector
         uint32_t write_length = MIN(FLASH_SECTOR_SIZE - (current_addr - sector_start_addr), remaining_length);
@@ -1669,10 +1663,10 @@ static w25q_error_codes_t page_write(uint32_t addr, uint8_t *data, uint32_t leng
     spi_set_command(spi, cmd_write_2);
     spi_wait_for_ready(spi);
 
-    // Wait for flash to be ready again (FPGA only)
-    #ifndef TARGET_SIM
+    // Wait for flash to be ready again
     flash_wait();
-    #endif // TARGET_SIM
+
+    return FLASH_OK;
 }
 
 static w25q_error_codes_t dma_send_toflash(uint8_t *data, uint32_t length) {
