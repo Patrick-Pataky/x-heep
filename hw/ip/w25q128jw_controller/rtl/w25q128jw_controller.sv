@@ -740,7 +740,13 @@ module w25q128jw_controller
                     hw2reg.intr_status.de   = 1'b1;     // Set interrupt status (rise IRQ through assignements (see end of module))
                     hw2reg.intr_status.d = reg2hw.intr_enable.q;
                   end
-
+                  // If WRITE has multiple pages to modify, continue with next page
+                  2'h3: begin
+                    fwait_cnt_d   = 2'h3;
+                    fwait_state_d = FWAIT_IDLE;
+                    top_state_d   = TOP_WRITE;
+                    write_state_d = WRITE_WE_CHECK_TX_FIFO;
+                  end
                   default: begin
                   end
                 endcase
@@ -1202,6 +1208,7 @@ module w25q128jw_controller
                   write_state_d = WRITE_IDLE;
                   top_state_d = TOP_FWAIT;
                   fwait_state_d = FWAIT_IDLE;
+                  fwait_cnt_d = 2'h2;
                   page_cnt_d = 4'b0;  // Reset page counter for time you use the controller
                 end else begin
                   // ===== MORE SECTORS TO PROCESS: Restart from READ =====
@@ -1213,8 +1220,11 @@ module w25q128jw_controller
                 end
               end else begin
                 // ===== MORE PAGES IN CURRENT SECTOR: Program next page =====
+                // Restart WE + PP sequence after waiting for BUSY bit
                 page_cnt_d = page_cnt_q + 1'h1;
-                write_state_d = WRITE_WE_CHECK_TX_FIFO;  // Restart WE + PP sequence
+                top_state_d = TOP_FWAIT;
+                fwait_state_d = FWAIT_IDLE;
+                fwait_cnt_d = 2'h3;
               end
             end
           end
