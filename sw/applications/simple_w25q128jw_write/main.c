@@ -27,13 +27,13 @@
 
 /* By default, printfs are activated for FPGA and disabled for simulation. */
 #define PRINTF_IN_FPGA  1
-#define PRINTF_IN_SIM   0
+#define PRINTF_IN_SIM   1
 
 /* 1 if SW write, 0 if HW write */
 #define SW_N_HW_WRITE 0
 
 #if TARGET_SIM && PRINTF_IN_SIM
-        #define PRINTF(fmt, ...)    printf(fmt, ## __VA_ARGS__)
+    #define PRINTF(fmt, ...)    printf(fmt, ## __VA_ARGS__)
 #elif PRINTF_IN_FPGA && !TARGET_SIM
     #define PRINTF(fmt, ...)    printf(fmt, ## __VA_ARGS__)
 #else
@@ -133,16 +133,17 @@ int main(void) {
     PRINTF("Write done\n");
 
     // we read back in SW as we assume the SW is the golden model
-    // w25q128jw_read_standard_dma((uint32_t)flash_ptr_test1, sram_buffer_read_flash_back, LENGTH_BYTES, 0, 0);
+    w25q128jw_read_standard_dma((uint32_t)flash_ptr_test1, sram_buffer_read_flash_back, LENGTH_BYTES, 0, 0);
 
-    // // Check Results
-    // for(int i=0;i<NUM_WORDS;i++) {
-    //     //in the .h, flash_buffer_test1 contains numbers from 0 to NUM_WORDS in order
-    //     if(sram_buffer_read_flash_back[i]!=sram_data[i]) {
-    //         PRINTF("At %d: expected %x, got %x\n", i, sram_data[i], sram_buffer_read_flash_back[i]);
-    //         return 2;
-    //     }
-    // }
+    // Check Results
+    for(int i=0;i<NUM_WORDS;i++) {
+        //in the .h, flash_buffer_test1 contains numbers from 0 to NUM_WORDS in order
+        if(sram_buffer_read_flash_back[i]!=sram_data[i]) {
+            PRINTF("At %d: expected %x, got %x\n", i, sram_data[i], sram_buffer_read_flash_back[i]);
+            return 2;
+        }
+    }
 
+    PRINTF("Test passed!\n");
     return EXIT_SUCCESS;
 }
