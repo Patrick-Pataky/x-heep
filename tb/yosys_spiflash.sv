@@ -181,7 +181,7 @@ module spiflash (
 
           erase_addr = spi_addr & 24'hfff000;
           for (erase_offset = 0; erase_offset < sector_size; erase_offset = erase_offset + 1) begin
-            memory[erase_addr + erase_offset] = 8'hff;
+            memory[erase_addr+erase_offset] = 8'hff;
           end
         end
       end
