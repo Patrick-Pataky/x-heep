@@ -265,10 +265,8 @@ w25q_error_codes_t w25q128jw_init(spi_host_t* spi_host) {
     // Power up flash
     flash_power_up();
 
-    // Set QE bit (only FPGA, simulation do not support writing to status registers)
-    #ifndef TARGET_SIM
+    // Set QE bit
     if (set_QE_bit() == FLASH_ERROR) return FLASH_ERROR; // Error occurred while setting QE bit
-    #endif // TARGET_SIM
 
     return FLASH_OK; // Success
 }
@@ -742,11 +740,7 @@ uint32_t* w25q128jw_read_quad_setup(uint32_t addr, void *data, uint32_t length) 
 
     // Quad read requires dummy clocks
     const uint32_t dummy_clocks_cmd = spi_create_command((spi_command_t){
-        #ifndef TARGET_SIM
         .len        = DUMMY_CLOCKS_FAST_READ_QUAD_IO-1, // W25Q128JW flash needs 4 dummy cycles
-        #else
-        .len        = DUMMY_CLOCKS_SIM-1, // SPI flash simulation model needs 8 dummy cycles
-        #endif
         .csaat      = true,              // Command not finished
         .speed      = SPI_SPEED_QUAD,     // Quad speed
         .direction  = SPI_DIR_DUMMY       // Dummy
@@ -804,11 +798,7 @@ w25q_error_codes_t w25q128jw_read_quad(uint32_t addr, void *data, uint32_t lengt
 
     // Quad read requires dummy clocks
     const uint32_t dummy_clocks_cmd = spi_create_command((spi_command_t){
-        #ifndef TARGET_SIM
-        .len        = DUMMY_CLOCKS_FAST_READ_QUAD_IO-1,
-        #else
-        .len        = DUMMY_CLOCKS_SIM-1,
-        #endif
+        .len        = DUMMY_CLOCKS_FAST_READ_QUAD_IO-1, // W25Q128JW flash needs 4 dummy cycles
         .csaat      = true,            // Command not finished
         .speed      = SPI_SPEED_QUAD,   // Quad speed
         .direction  = SPI_DIR_DUMMY     // Dummy
@@ -893,10 +883,8 @@ w25q_error_codes_t w25q128jw_erase_and_write_quad(uint32_t addr, void *data, uin
         status = w25q128jw_read_quad(sector_start_addr, w25q128jw_sector_data, FLASH_SECTOR_SIZE);
         if (status != FLASH_OK) return FLASH_ERROR;
 
-        // Erase the sector (no need to do so in simulation)
-        #ifndef TARGET_SIM
+        // Erase the sector
         w25q128jw_4k_erase(sector_start_addr);
-        #endif // TARGET_SIM
 
         // Calculate the length of data to write in this sector
         uint32_t write_length = MIN(FLASH_SECTOR_SIZE - (current_addr - sector_start_addr), remaining_length);
@@ -952,11 +940,7 @@ w25q_error_codes_t w25q128jw_read_quad_dma(uint32_t addr, void *data, uint32_t l
 
     // Quad read requires dummy clocks
     const uint32_t dummy_clocks_cmd = spi_create_command((spi_command_t){
-        #ifndef TARGET_SIM
         .len        = DUMMY_CLOCKS_FAST_READ_QUAD_IO-1, // W25Q128JW flash needs 4 dummy cycles
-        #else
-        .len        = DUMMY_CLOCKS_SIM-1, // SPI flash simulation model needs 8 dummy cycles
-        #endif
         .csaat      = true,              // Command not finished
         .speed      = SPI_SPEED_QUAD,     // Quad speed
         .direction  = SPI_DIR_DUMMY       // Dummy
@@ -1074,11 +1058,7 @@ w25q_error_codes_t w25q128jw_read_quad_dma_async(uint32_t addr, void *data, uint
 
     // Quad read requires dummy clocks
     const uint32_t dummy_clocks_cmd = spi_create_command((spi_command_t){
-        #ifndef TARGET_SIM
         .len        = DUMMY_CLOCKS_FAST_READ_QUAD_IO-1, // W25Q128JW flash needs 4 dummy cycles
-        #else
-        .len        = DUMMY_CLOCKS_SIM-1, // SPI flash simulation model needs 8 dummy cycles
-        #endif
         .csaat      = true,              // Command not finished
         .speed      = SPI_SPEED_QUAD,     // Quad speed
         .direction  = SPI_DIR_DUMMY       // Dummy
@@ -1186,10 +1166,8 @@ w25q_error_codes_t w25q128jw_erase_and_write_quad_dma(uint32_t addr, void *data,
         status = w25q128jw_read_quad_dma(sector_start_addr, w25q128jw_sector_data, FLASH_SECTOR_SIZE);
         if (status != FLASH_OK) return FLASH_ERROR;
 
-        // Erase the sector (no need to do so in simulation)
-        #ifndef TARGET_SIM
+        // Erase the sector
         w25q128jw_4k_erase(sector_start_addr);
-        #endif // TARGET_SIM
 
         // Calculate the length of data to write in this sector
         uint32_t write_length = MIN(FLASH_SECTOR_SIZE - (current_addr - sector_start_addr), remaining_length);
