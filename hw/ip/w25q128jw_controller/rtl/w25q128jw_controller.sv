@@ -63,6 +63,8 @@ module w25q128jw_controller
   localparam logic [1:0] SPI_SPEED_STD = 2'h0;
   localparam logic [1:0] SPI_SPEED_QUAD = 2'h2;
 
+  localparam logic [23:0] SPI_DUMMY_CYCLES_WAIT = 24'h03;
+
   // FLASH COMMANDS
   localparam logic [12:0] FC_RD = 13'h03,  // Read Data
   FC_RDQIO = 13'heb,  // Read Data Quad I/O
@@ -579,22 +581,11 @@ module w25q128jw_controller
           end
 
           READ_SPI_SEND_CMD_DUMMY_QUAD: begin
-            spi_host_reg_req_offset  = SPI_HOST_COMMAND_OFFSET;
+            spi_host_reg_req_offset = SPI_HOST_COMMAND_OFFSET;
             spi_host_reg_req_o.write = 1'b1;
             spi_host_reg_req_o.valid = 1'b1;
-
-`ifndef FPGA_SYNTHESIS
-`ifndef SYNTHESIS
             spi_host_reg_req_o.wdata =
-                spi_cmd_pack(SPI_DIR_DUMMY, SPI_SPEED_QUAD, 1'b1, 24'h7);  //Sim
-`else
-            spi_host_reg_req_o.wdata =
-                spi_cmd_pack(SPI_DIR_DUMMY, SPI_SPEED_QUAD, 1'b1, 24'h7);  // Also sim
-`endif
-`else
-            spi_host_reg_req_o.wdata =
-                spi_cmd_pack(SPI_DIR_DUMMY, SPI_SPEED_QUAD, 1'b1, 24'h3);  // FPGA
-`endif
+                spi_cmd_pack(SPI_DIR_DUMMY, SPI_SPEED_QUAD, 1'b1, SPI_DUMMY_CYCLES_WAIT);
             if (spi_host_reg_rsp_i.ready && ~spi_host_reg_rsp_i.error) begin
               read_state_d = READ_SPI_QUAD_WAIT_READY_DUMMY;
             end
