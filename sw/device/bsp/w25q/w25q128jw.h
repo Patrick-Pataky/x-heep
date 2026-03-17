@@ -270,6 +270,8 @@ w25q_error_codes_t w25q128jw_erase_and_write_standard(uint32_t addr, void* data,
  * @param addr 24-bit flash address to read from.
  * @param data pointer to the data buffer.
  * @param length number of bytes to read.
+ * @param no_wait_init_dma if 1, the function will not wait for the DMA to be free before starting the transaction
+ * @param no_sanity_checks if 1, the function will not perform sanity checks on input
  * @return FLASH_OK if the read is successful, @ref error_codes otherwise.
 */
 w25q_error_codes_t w25q128jw_read_standard_dma(uint32_t addr, void *data, uint32_t length, uint8_t no_wait_init_dma, uint8_t no_sanity_checks);
