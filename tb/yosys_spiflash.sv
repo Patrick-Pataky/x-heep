@@ -26,7 +26,11 @@
 // updates output signals 1ns after the SPI clock edge.
 //
 // Supported commands:
-//    AB, B9, FF, 03, BB, EB, ED, 06, 02, 32, 20, 05
+//    AB, B9, FF, 03, BB, EB, ED, 06, 02, 32, 20
+// 
+// Partially supported commands:
+//    05      (only Write-Enable Latch and BUSY bit support)
+//    31, 35  (only Quad-Enable bit support)
 //
 // Well written SPI flash data sheets:
 //    Cypress S25FL064L http://www.cypress.com/file/316661/download
@@ -55,7 +59,7 @@ module spiflash (
     inout wire io3
 );
   localparam verbose = 0;
-  localparam integer latency = 8;
+  localparam integer latency = 4;
   localparam integer sector_size = 4096;  // 4 KB
   localparam integer busy_cycles = 100;
 
@@ -77,6 +81,7 @@ module spiflash (
   logic powered_up = 0;
   logic write_enable = 0;
   logic write_enable_reset = 0;
+  logic quad_enable = 0;
 
   logic command_pending = 0;
   integer current_busy_cycles = 0;
@@ -167,6 +172,22 @@ module spiflash (
         end
       end
 
+      if (powered_up && spi_cmd == 'h35) begin
+        if (bytecount == 1) begin
+          // Simplified model:
+          // - All bits to 0 except QE bit
+          buffer = {6'b000000, quad_enable, 1'b0};
+        end
+      end
+
+      if (powered_up && spi_cmd == 'h31) begin
+        if (bytecount == 1) begin
+          // Simplified model:
+          // - All bits to 0 except QE bit
+          if (buffer[1] == 1'b1) quad_enable = buffer[1];
+        end
+      end
+
       if (powered_up && write_enable && spi_cmd == 'h02) begin
         if (bytecount == 1) begin
           write_enable_reset = 1;
@@ -226,7 +247,7 @@ module spiflash (
         end
       end
 
-      if (powered_up && spi_cmd == 'heb) begin
+      if (powered_up && quad_enable && spi_cmd == 'heb) begin
         if (bytecount == 1) mode = mode_qspi_rd;
 
         if (bytecount == 2) spi_addr[23:16] = buffer;
@@ -247,8 +268,11 @@ module spiflash (
         end
       end
 
-      if (powered_up && write_enable && spi_cmd == 'h32) begin
-        if (bytecount == 1) write_enable_reset = 1;
+      if (powered_up && write_enable && quad_enable && spi_cmd == 'h32) begin
+        if (bytecount == 1) begin
+          write_enable_reset = 1;
+          command_pending = 1;
+        end
 
         if (bytecount == 2) spi_addr[23:16] = buffer;
 
@@ -265,7 +289,7 @@ module spiflash (
         end
       end
 
-      if (powered_up && spi_cmd == 'hed) begin
+      if (powered_up && quad_enable && spi_cmd == 'hed) begin
         if (bytecount == 1) next_mode = mode_qspi_ddr_rd;
 
         if (bytecount == 2) spi_addr[23:16] = buffer;
