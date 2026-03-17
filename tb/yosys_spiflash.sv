@@ -165,7 +165,7 @@ module spiflash (
       end
 
       if (powered_up && spi_cmd == 'h05) begin
-        if (bytecount == 2) begin
+        if (bytecount == 1) begin
           // Simplified model:
           // - protect bits always 0
           buffer = {6'b000000, write_enable, (current_busy_cycles != 0)};
@@ -173,7 +173,7 @@ module spiflash (
       end
 
       if (powered_up && spi_cmd == 'h35) begin
-        if (bytecount == 2) begin
+        if (bytecount == 1) begin
           // Simplified model:
           // - All bits to 0 except QE bit
           buffer = {6'b000000, quad_enable, 1'b0};
@@ -189,11 +189,7 @@ module spiflash (
       end
 
       if (powered_up && spi_cmd == 'hff) begin
-        if (bytecount == 2) begin
-          // Simplified model:
-          // - All bits to 0 except QE bit
-          quad_enable = 1'b0;
-        end
+        quad_enable = 1'b0;
       end
 
       if (powered_up && write_enable && spi_cmd == 'h02) begin
