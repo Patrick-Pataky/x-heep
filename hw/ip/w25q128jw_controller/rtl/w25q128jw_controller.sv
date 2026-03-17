@@ -348,13 +348,6 @@ module w25q128jw_controller
       // Wait for SW to set the START bit in CONTROL register
       TOP_IDLE: begin
         if (reg2hw.control.start.q) begin
-          if (!reg2hw.control.rnw.q) begin
-            fwait_cnt_d = 2'h0;
-            page_cnt_d = 4'h0;
-            sector_iter_offset_d = 32'h0;
-            md_offset_d = 32'h0;
-          end
-
           top_state_d = TOP_READ;  // Always start with READ (for both read and write operations)
         end
       end
