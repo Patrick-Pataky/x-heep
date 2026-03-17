@@ -26,7 +26,7 @@
 // updates output signals 1ns after the SPI clock edge.
 //
 // Supported commands:
-//    AB, B9, FF, 03, BB, EB, ED, 06, 02, 32, 20
+//    AB, B9, FF, 03, BB, EB, ED, 06, 02, 32, 20, FF
 // 
 // Partially supported commands:
 //    05      (only Write-Enable Latch and BUSY bit support)
@@ -185,6 +185,14 @@ module spiflash (
           // Simplified model:
           // - All bits to 0 except QE bit
           if (buffer[1] == 1'b1) quad_enable = buffer[1];
+        end
+      end
+
+      if (powered_up && spi_cmd == 'hff) begin
+        if (bytecount == 1) begin
+          // Simplified model:
+          // - All bits to 0 except QE bit
+          quad_enable = 1'b0;
         end
       end
 
