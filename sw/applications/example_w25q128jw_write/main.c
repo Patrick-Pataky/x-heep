@@ -172,7 +172,7 @@ int main(void) {
 
     //change sram_data
     for(int i=0;i<NUM_WORDS;i++)
-       sram_data[i]|= 0xAAAA0000;
+       sram_data[i] |= 0xAAAA0000;
 
     // Write to flash memory at specific address (i.e. flash_buffer_test2) the value from sram_data in HW
     // we use interrupt now
@@ -295,33 +295,20 @@ int main(void) {
     }
 
     // Reset dma wait counter
-    w25q128jw_set_dma_slot_wait_counter(2);
+    w25q128jw_set_dma_slot_wait_counter(0);
 
 
     /**************************************************************** */
-    PRINTF("Test 7: Hardware Write, quad speed, DMA, interrupt\n");
+    PRINTF("Test 7: Hardware Write, quad speed, DMA, no interrupt\n");
     // Reset the flash data buffer
     memset(sram_buffer_read_flash_back, 0, LENGTH_BYTES);
 
     //change sram_data
     for(int i=0;i<NUM_WORDS;i++)
-       sram_data[i]|= 0xAAAA0000;
+       sram_data[i] |= 0xAAAA0000;
 
     // Write to flash memory at specific address (i.e. flash_buffer_test2) the value from sram_data in HW
-    // we use interrupt now
-    // Clear HW regs before starting operation
-    w25q128jw_controller_clear_status_register();
-    // Clear SW flag of ISR before starting operation
-    w25q128jw_controller_clear_done_flag();
-    // Activate interrupt in PLIC
-    plic_Init();
-    plic_irq_set_priority(W25Q128JW_CONTROLLER_INTR_EVENT, 1);
-    plic_irq_set_enabled(W25Q128JW_CONTROLLER_INTR_EVENT, kPlicToggleEnabled);
-    // Activate global CPU interrupts
-    CSR_SET_BITS(CSR_REG_MSTATUS, 0x8);   // Global interrupt enable for machine mode (MIE) bit in Machine Status Registers
-    CSR_SET_BITS(CSR_REG_MIE, (1 << 11)); // Machine External Interrupt Enable (MEIE) bit in Machine Interrupt Pending Register
-
-    w25q128jw_controller_run(1, 1, flash_ptr_test2);
+    w25q128jw_controller_run(0, 1, flash_ptr_test2);
 
     // we read back in SW as we assume the SW is the golden model
     w25q128jw_read_quad_dma((uint32_t)flash_ptr_test2, sram_buffer_read_flash_back, LENGTH_BYTES);
@@ -428,7 +415,7 @@ int main(void) {
     }
 
     // Reset dma wait counter
-    w25q128jw_set_dma_slot_wait_counter(2);
+    w25q128jw_set_dma_slot_wait_counter(0);
 
 
     /**************************************************************** */
