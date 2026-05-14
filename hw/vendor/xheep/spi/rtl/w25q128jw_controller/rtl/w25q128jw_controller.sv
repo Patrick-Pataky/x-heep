@@ -104,7 +104,7 @@ module w25q128jw_controller
       input logic [31:0] src_ptr, input logic [31:0] dst_ptr, input logic [31:0] src_ptr_inc,
       input logic [31:0] dst_ptr_inc, input logic [1:0] src_data_type, dst_data_type,
       input logic [31:0] rx_trigger_slot, input logic [31:0] tx_trigger_slot,
-      input logic [31:0] slot_wait_counter, input logic [15:0] size_d1);
+      input logic [31:0] slot_wait_counter, input logic [1:0] mode, input logic [15:0] size_d1);
     // Set DMA source pointer
     external_dma_hw2reg_o.src_ptr.de = 1'b1;
     external_dma_hw2reg_o.src_ptr.d = src_ptr;
@@ -131,6 +131,9 @@ module w25q128jw_controller
     // Set slot wait counter
     external_dma_hw2reg_o.slot_wait_counter.de = 1'b1;
     external_dma_hw2reg_o.slot_wait_counter.d = slot_wait_counter;
+
+    external_dma_hw2reg_o.mode.de = 1'b1;
+    external_dma_hw2reg_o.mode.d = mode;
 
     // Set transfer size and START DMA
     // Writing to SIZE_D1 register triggers DMA transaction (See hw/ip/dma/data/dma.hjson)
@@ -492,8 +495,9 @@ module w25q128jw_controller
                 set_dma_regs(
                     SPI_FLASH_START_ADDRESS + {25'b0, SPI_HOST_RXDATA_OFFSET}, reg2hw.s_address.q,
                     32'h0, 32'h1,  // src_inc=0 (FIFO), dst_inc=1 (SRAM)
-                    2'h0, 2'h2,  // src_data_type=32-bit (FIFO), dst_data_type=8-bit (SRAM)
+                    2'h2, 2'h2,  // src_data_type=8-bit (FIFO), dst_data_type=8-bit (SRAM)
                     'h4, 'h0, reg2hw.dma_slot_wait_counter.q,  // slot_wait_counter to write to DMA
+                    2'h3, // DMA_TRANS_MODE_SUBADDRESS
                     {14'h0, head_bytes_q});
               end else begin
                 if (dma_size_d != 0) begin
@@ -504,15 +508,17 @@ module w25q128jw_controller
                       2'h0, 2'h0,  // src_data_type=32-bit (FIFO), dst_data_type=32-bit (SRAM)
                       'h4, 'h0,
                       reg2hw.dma_slot_wait_counter.q,  // slot_wait_counter to write to DMA
+                      2'h0,
                       dma_size_d[15:0]);
                 end else begin
                   // TAIL only
                   set_dma_regs(
                       SPI_FLASH_START_ADDRESS + {25'b0, SPI_HOST_RXDATA_OFFSET}, reg2hw.s_address.q,
                       32'h0, 32'h1,  // src_inc=0 (FIFO), dst_inc=1 (byte)
-                      2'h0, 2'h2,  // src_data_type=32-bit (FIFO), dst_data_type=8-bit (SRAM)
+                      2'h2, 2'h2,  // src_data_type=8-bit (FIFO), dst_data_type=8-bit (SRAM)
                       'h4, 'h0,
                       reg2hw.dma_slot_wait_counter.q,  // slot_wait_counter to write to DMA
+                      2'h3, // DMA_TRANS_MODE_SUBADDRESS
                       {14'h0, tail_bytes_q});
                 end
               end
@@ -525,6 +531,7 @@ module w25q128jw_controller
                            2'h0, 2'h0,  // src_data_type=32-bit (FIFO), dst_data_type=32-bit (SRAM)
                            'h4, 'h0,
                            reg2hw.dma_slot_wait_counter.q,  // slot_wait_counter to write to DMA
+                           2'h0,
                            dma_size_d[15:0]);
             end
           end
@@ -820,6 +827,7 @@ module w25q128jw_controller
                            2'h0, 2'h0,  // src_data_type=32-bit (FIFO), dst_data_type=32-bit (SRAM)
                            'h4, 'h0,
                            reg2hw.dma_slot_wait_counter.q,  // slot_wait_counter to write to DMA
+                           2'h0,
                            dma_size_q[15:0]);
             end else begin
               // No body to transfer, goto to tail
@@ -872,6 +880,7 @@ module w25q128jw_controller
                            2'h0, 2'h2,  // src_data_type=32-bit (FIFO), dst_data_type=8-bit (SRAM)
                            'h4, 'h0,
                            reg2hw.dma_slot_wait_counter.q,  // slot_wait_counter to write to DMA
+                           2'h3, // DMA_TRANS_MODE_SUBADDRESS
                            {14'h0, tail_bytes_q});
             end else begin
               // No tail to transfer, complete operation
@@ -1286,7 +1295,9 @@ module w25q128jw_controller
                            reg2hw.s_address.q + {20'h0, sector_offset_q}, 32'h1,
                            32'h1,  // 1-byte transfer
                            2'h2, 2'h2,  // src_data_type=32-bit (MD), dst_data_type=8-bit (SRAM)
-                           'h0, 'h0, 'h0, {14'h0, head_bytes_q});
+                           'h0, 'h0, 'h0,
+                           2'h0,
+                           {14'h0, head_bytes_q});
             end else begin
               // No head to transfer, go directly to body
               modify_state_d = MODIFY_BODY_REGS;
@@ -1323,7 +1334,7 @@ module w25q128jw_controller
                            reg2hw.s_address.q + {20'h0, sector_offset_q}, 32'h4,
                            32'h4,  // 4-byte increment for word transfers
                            2'h0, 2'h0,  // src_data_type=32-bit (MD), dst_data_type=32-bit (SRAM)
-                           'h0, 'h0, 'h0, dma_size_d[15:0]);
+                           'h0, 'h0, 'h0, 2'h0, dma_size_d[15:0]);
 
               modify_state_d = MODIFY_BODY_TRANS;
             end else begin
@@ -1372,7 +1383,7 @@ module w25q128jw_controller
                            reg2hw.s_address.q + {20'h0, sector_offset_q}, 32'h1,
                            32'h1,  // 1-byte transfer
                            2'h2, 2'h2,  // src_data_type=32-bit (MD), dst_data_type=8-bit (SRAM)
-                           'h0, 'h0, 'h0, tail_bytes_q);
+                           'h0, 'h0, 'h0, 2'h0, tail_bytes_q);
 
               modify_state_d = MODIFY_TAIL_TRANS;
             end
@@ -1541,6 +1552,7 @@ module w25q128jw_controller
                          32'h0,  // src_inc=4 (word), dst_inc=0 (FIFO)
                          2'h0, 2'h0,  // src_data_type=32-bit, dst_data_type=32-bit
                          'h0, 'h8, reg2hw.dma_slot_wait_counter.q,  // slot_wait_counter
+                         2'h0,
                          {3'h0, PAGE_WSIZE});
           end
 
